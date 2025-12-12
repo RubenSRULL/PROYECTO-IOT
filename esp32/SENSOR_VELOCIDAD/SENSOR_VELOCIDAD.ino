@@ -1,3 +1,8 @@
+//AUTOR: Ruben Sahuquillo Redondo
+//ASIGNATURA: Internet de las Cosas
+//CÓDIGO uC SENSORIZACION
+
+
 // --- LIBRERÍAS --- //
 #include <PubSubClient.h>
 #include <WiFi.h>
@@ -21,7 +26,6 @@ volatile unsigned long lastPulseTime = 0;
 // --- OBJETOS --- //
 WiFiClient espClient;
 PubSubClient client(espClient);
-String ip = "";
 
 // --- ISR --- //
 void IRAM_ATTR pulseISR() {
@@ -41,39 +45,27 @@ int leerPulsos() {
   return p;
 }
 
-// --- CALLBACK --- //
-void callback(char* topic, byte* payload, unsigned int length) {
-  String msg = "";
-  for (int i = 0; i < length; i++) msg += (char)payload[i];
-  ip = msg;
-}
-
 // --- WIFI --- //
 void configWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-
   Serial.print("Conectando");
-
   while (WiFi.status() != WL_CONNECTED) {
     delay(300);
     Serial.print(".");
   }
-
   Serial.println("\nWiFi conectado");
 }
 
 // --- MQTT --- //
 void MQTTreconnect() {
-
   while (!client.connected()) {
-    if (WiFi.status() != WL_CONNECTED) configWifi();
-
+    if (WiFi.status() != WL_CONNECTED){
+      configWifi();
+    }
     Serial.print("Intentando MQTT... ");
-
     if (client.connect("ESP32_HallSensor")) {
       Serial.println("OK");
-      client.subscribe("esp32/ip");
     } else {
       Serial.print("Error: ");
       Serial.println(client.state());
@@ -82,40 +74,34 @@ void MQTTreconnect() {
   }
 }
 
-void publishRPM(float rpm) {
+// --- PUBLICAR HZ --- //
+void publishHZ(float vel) {
   char buffer[16];
-  snprintf(buffer, sizeof(buffer), "%.0f", rpm);
+  snprintf(buffer, sizeof(buffer), "%.0f", vel);
   client.publish("esp32/hz", buffer);
 }
 
+// --- SETUP --- //
 void setup() {
   Serial.begin(115200);
-
   configWifi();
-
   client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);
-
   pinMode(SENSOR_HALL, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(SENSOR_HALL), pulseISR, FALLING);
-
   lastSample = millis();
 }
 
+// --- LOOP --- //
 void loop() {
-  if (!client.connected()) MQTTreconnect();
+  if (!client.connected()){
+    MQTTreconnect();
+  } 
   client.loop();
-
   unsigned long now = millis();
-
   if (now - lastSample >= SAMPLE_INTERVAL) {
-
     float pulsos = float(leerPulsos()) / 2.00;
-
-    publishRPM(pulsos);
+    publishHZ(pulsos);
     Serial.println(pulsos);
-
     lastSample = now;
   }
 }
-
