@@ -7,6 +7,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <PubSubClient.h>
+#include <LiquidCrystal_I2C.h>
 
 // --- ESTADOS MOTOR --- //
 #define PARADA     0
@@ -39,6 +40,7 @@ const char* mqtt_server = "10.74.94.63";
 WiFiClient espClient;
 PubSubClient client(espClient);
 WebServer server(80);
+LiquidCrystal_I2C lcd(0x27,16,2);
 
 // --- VELOCIDAD --- //
 float velocidadNominal = 50.00;
@@ -51,10 +53,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   String msg = "";
   for (int i = 0; i < length; i++) msg += (char)payload[i];
   velocidad = msg.toFloat();
-  Serial.println(velocidad);
+
   Serial.print("Velocidad actualizada: ");
   Serial.println(velocidad);
+
+  mostrarVelocidadLCD();
 }
+
 
 // --- WIFI --- //
 void configWifi() {
@@ -68,7 +73,21 @@ void configWifi() {
   Serial.println("\nWiFi conectado");
   Serial.print("IP: ");
   Serial.println(WiFi.localIP());
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("IP:");
+  lcd.print(WiFi.localIP());
 }
+
+// --- MOSTRAR VELOCIDAD --- //
+void mostrarVelocidadLCD() {
+  lcd.setCursor(0, 1);
+  lcd.print("Vel: ");
+  lcd.print(velocidad, 2);
+  lcd.print(" Hz   ");
+}
+
 
 // --- MQTT --- //
 void reconnect() {
@@ -163,7 +182,7 @@ setInterval(() => {
   if (estado == PARADA){
     h.replace("%ESTADO%", "PARADO");
   }
-  else if (estado == GIRO_CW{
+  else if (estado == GIRO_CW) {
     h.replace("%ESTADO%", "GIRO CW");
   }
   else if (estado == GIRO_CCW){
@@ -231,7 +250,7 @@ void iniciarArranque() {
 void actualizarArranque() {
   if (etapa == ETAPA_IDLE) return;
   if (etapa == ETAPA_TRIANGULO) return;
-  if ((etapa == ETAPA_ESTRELLA) && (velocidad >= 40.00)) {
+  if ((etapa == ETAPA_ESTRELLA) && (velocidad >= 3.00)) {
     etapa = ETAPA_TRIANGULO;
     digitalWrite(rele3, HIGH);
     digitalWrite(rele4, LOW);
@@ -246,6 +265,8 @@ void setup() {
   pinMode(rele3, OUTPUT);
   pinMode(rele4, OUTPUT);
   parar();
+  lcd.init();
+  lcd.backlight();
   configWifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
@@ -255,6 +276,7 @@ void setup() {
   server.on("/ccw", ccwMotor);
   server.on("/datos", enviarDatos);
   server.begin();
+  
 }
 
 // --- LOOP --- //
